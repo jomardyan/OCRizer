@@ -1,0 +1,65 @@
+name: Tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - run: ruff check src tests packaging
+      - run: mypy src
+
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022]
+        python: ['3.11', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install Linux OCR and Qt dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-pol tesseract-ocr-osd fonts-dejavu-core libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0
+      - name: Install Windows OCR dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install tesseract --yes --no-progress
+          $taskTesseract = Join-Path $env:ProgramFiles 'Tesseract-OCR'
+          $taskData = Join-Path $taskTesseract 'tessdata'
+          foreach ($taskLang in @('eng', 'pol', 'osd')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $taskData "$taskLang.traineddata"))) {
+              Invoke-WebRequest "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/$taskLang.traineddata" -OutFile (Join-Path $taskData "$taskLang.traineddata")
+            }
+          }
+          $taskTesseract | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - run: python -m pip install -e '.[gui,test]'
+      - run: pdfocr --check
+      - run: python -m pytest

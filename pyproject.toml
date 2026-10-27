@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocrizer"
+dynamic = ["version"]
+description = "Local, offline PDF OCR (Polish and English) with a GUI and a CLI, built on OCRmyPDF and Tesseract."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+keywords = ["ocr", "pdf", "tesseract", "ocrmypdf", "polish"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Topic :: Text Processing",
+]
+# Runtime dependencies for the engine and the CLI. The GUI is an optional extra
+# so that headless servers do not have to install Qt.
+dependencies = [
+    "ocrmypdf>=17.13,<18",   # OCR pipeline (pulls in pikepdf, pillow, pypdfium2, ...)
+    "pikepdf>=9",            # PDF validation (corrupt / encrypted / empty)
+    "pypdfium2>=4.30",       # per-page text detection, page rendering, text export
+    "pillow>=10",
+    "py3langid>=0.3",        # offline language identification (Polish vs English)
+    "psutil>=5.9",           # reliable termination of OCR process trees on cancel
+    "platformdirs>=4",       # per-user config / log locations
+]
+
+[project.optional-dependencies]
+gui = ["PySide6-Essentials>=6.6,<7"]
+test = ["pytest>=8", "pytest-timeout>=2.3"]
+build = ["build>=1.2", "twine>=6", "pyinstaller>=6.16,<7"]
+dev = [
+    "pytest>=8", "pytest-timeout>=2.3", "ruff>=0.5", "mypy>=1.10",
+    "build>=1.2", "twine>=6", "pyinstaller>=6.16,<7",
+]
+
+[project.scripts]
+pdfocr = "ocrizer.cli:main"
+
+[project.gui-scripts]
+pdfocr-gui = "ocrizer.gui.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "ocrizer.__version__"}
+
+[tool.setuptools.package-data]
+ocrizer = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "integration: runs real Tesseract OCR (skipped automatically when Tesseract or the pol/eng language packs are missing)",
+    "gui: needs PySide6 (runs headless with QT_QPA_PLATFORM=offscreen)",
+]
+timeout = 600
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["SIM105"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501", "I001", "F841", "E402", "B017", "SIM117"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "ocrizer.gui.*"
+disable_error_code = ["union-attr", "arg-type"]  # Qt stubs return Optional almost everywhere

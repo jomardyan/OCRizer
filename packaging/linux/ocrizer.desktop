@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=OCRizer
+Comment=Make scanned PDF documents searchable, offline
+Exec=OCRizer
+Icon=ocrizer
+Terminal=false
+Categories=Office;Utility;
+StartupWMClass=OCRizer

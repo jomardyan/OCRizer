@@ -1,0 +1,9 @@
+include README.md
+include LICENSE
+include pyproject.toml
+recursive-include src/ocrizer py.typed
+recursive-include packaging *.py *.spec *.ps1 *.sh *.desktop *.svg AppRun
+recursive-include tests *.py
+recursive-include docs *.md
+recursive-include .github *.yml
+global-exclude __pycache__ *.py[cod]

@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+APPDIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+export PATH="$APPDIR/usr/bin:$PATH"
+export LD_LIBRARY_PATH="$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export TESSDATA_PREFIX="$APPDIR/usr/share/tessdata"
+export OCRIZER_TESSERACT="$APPDIR/usr/bin/tesseract"
+if [ "${1:-}" = "--cli" ]; then
+    shift
+    exec "$APPDIR/usr/lib/ocrizer/pdfocr" "$@"
+fi
+exec "$APPDIR/usr/lib/ocrizer/OCRizer" "$@"
