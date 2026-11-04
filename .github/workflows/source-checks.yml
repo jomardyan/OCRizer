@@ -1,0 +1,22 @@
+name: Runtime dependency audit
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '29 5 * * 1'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install . pip-audit
+      - run: python -m pip_audit --local --progress-spinner off

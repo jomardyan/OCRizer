@@ -452,3 +452,5 @@ spaces, ASCII-only consoles, and the GUI (headless, with a real end-to-end run a
   output filesystem or explicitly request `--overwrite`.
 * A document's own metadata, bookmarks and links are retained by OCRmyPDF; digitally signed
   files are refused.
+
+[Maintenance audit and validation notes](docs/AUDIT-2026-11-04.md) documents the reviewed scope, development commands, checks and remaining limits.
