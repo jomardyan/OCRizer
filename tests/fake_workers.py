@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 from ocrizer.models import JobOutcome, JobStatus, ProgressEvent
 
@@ -40,6 +41,9 @@ def sleep_worker(conn, request):  # type: ignore[no-untyped-def]
     (request.scratch_dir / "work.tmp").write_text("x")
     request.partial_pdf.write_bytes(b"%PDF-partial")
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(300)"])
+    pid_directory = os.environ.get("FAKE_PID_DIR")
+    if pid_directory:
+        Path(pid_directory, str(child.pid)).touch()
     pid_file = os.environ.get("FAKE_PID_FILE")
     if pid_file:
         with open(pid_file, "a") as fh:

@@ -20,6 +20,8 @@ import logging
 import multiprocessing
 import os
 import shutil
+import signal
+import sys
 import tempfile
 import threading
 import time
@@ -73,24 +75,42 @@ def kill_process_tree(pid: int, timeout: float = 5.0) -> None:
         root = psutil.Process(pid)
     except psutil.NoSuchProcess:
         return
-    killed: list[psutil.Process] = [root]
-    for _ in range(3):  # sweep again in case something spawned while we were killing
+    # Real POSIX OCR workers own a session. A group signal also reaches children
+    # created after a process-tree snapshot, so cancellation cannot strand a new
+    # Tesseract process while its parent is being terminated.
+    if sys.platform != "win32":
         try:
-            descendants = root.children(recursive=True)
+            if os.getpgid(pid) == pid:
+                descendants = root.children(recursive=True)
+                os.killpg(pid, signal.SIGKILL)
+                psutil.wait_procs([root, *descendants], timeout=timeout)
+                return
+        except (ProcessLookupError, psutil.NoSuchProcess):
+            return
+        except (PermissionError, psutil.Error):
+            pass
+
+    # Windows (and stand-in workers without a session): freeze each parent
+    # before discovering its children, preventing further spawns during teardown.
+    killed: list[psutil.Process] = []
+    pending = [root]
+    seen: set[int] = set()
+    while pending:
+        proc = pending.pop()
+        if proc.pid in seen:
+            continue
+        seen.add(proc.pid)
+        killed.append(proc)
+        try:
+            proc.suspend()
+            pending.extend(proc.children())
         except psutil.Error:
-            break
-        if not descendants:
-            break
-        for proc in reversed(descendants):
-            killed.append(proc)
-            try:
-                proc.kill()
-            except psutil.Error:
-                pass
-    try:
-        root.kill()
-    except psutil.Error:
-        pass
+            pass
+    for proc in reversed(killed):
+        try:
+            proc.kill()
+        except psutil.Error:
+            pass
     psutil.wait_procs(killed, timeout=timeout)
 
 

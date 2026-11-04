@@ -7,6 +7,8 @@ real process management without needing Tesseract.
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -138,8 +140,9 @@ def test_unwritable_output_directory_fails_only_that_job(docs, scratch_root):
 
 def test_cancel_kills_process_tree_and_cleans_up(docs, scratch_root, tmp_path, monkeypatch):
     files = make_docs(docs, "a.pdf", "b.pdf", "c.pdf", "d.pdf")
-    pid_file = tmp_path / "pids.txt"
-    monkeypatch.setenv("FAKE_PID_FILE", str(pid_file))
+    pid_directory = tmp_path / "pids"
+    pid_directory.mkdir()
+    monkeypatch.setenv("FAKE_PID_DIR", str(pid_directory))
     runner = make_runner(plan_jobs(files, OutputSettings()), fake_workers.sleep_worker, workers=2)
     holder = {}
     thread = threading.Thread(target=lambda: holder.setdefault("summary", runner.run()))
@@ -147,10 +150,10 @@ def test_cancel_kills_process_tree_and_cleans_up(docs, scratch_root, tmp_path, m
 
     deadline = time.time() + 60
     while time.time() < deadline:  # wait until both workers have spawned their grandchild
-        if pid_file.exists() and len(pid_file.read_text().split()) >= 2:
+        if len(list(pid_directory.iterdir())) >= 2:
             break
         time.sleep(0.1)
-    pids = [int(p) for p in pid_file.read_text().split()]
+    pids = [int(p.name) for p in pid_directory.iterdir()]
     assert len(pids) == 2 and all(psutil.pid_exists(p) for p in pids)
 
     started = time.time()
@@ -189,14 +192,15 @@ def test_event_callback_errors_do_not_abort_the_batch(docs, scratch_root):
 
 def test_at_most_n_workers_run_concurrently(docs, scratch_root, tmp_path, monkeypatch):
     files = make_docs(docs, *(f"{i}.pdf" for i in range(5)))
-    pid_file = tmp_path / "pids.txt"
-    monkeypatch.setenv("FAKE_PID_FILE", str(pid_file))
+    pid_directory = tmp_path / "pids"
+    pid_directory.mkdir()
+    monkeypatch.setenv("FAKE_PID_DIR", str(pid_directory))
     runner = make_runner(plan_jobs(files, OutputSettings()), fake_workers.sleep_worker, workers=2)
     thread = threading.Thread(target=runner.run)
     thread.start()
 
     def spawned_count() -> int:
-        return len(pid_file.read_text().split()) if pid_file.exists() else 0
+        return len(list(pid_directory.iterdir()))
 
     deadline = time.time() + 90
     while spawned_count() < 2 and time.time() < deadline:
@@ -301,3 +305,33 @@ def test_duplicate_job_indices_are_rejected(tmp_path):
     job = Job(0, tmp_path / "input.pdf", tmp_path / "output.pdf")
     with pytest.raises(ConfigError, match="unique index"):
         BatchRunner([job, job], OcrSettings())
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process-group contract")
+def test_cancellation_kills_an_isolated_group_while_children_are_spawning(tmp_path):
+    pid_file = tmp_path / "group-pids.txt"
+    script = (
+        "import pathlib,subprocess,sys,time; "
+        "output=pathlib.Path(sys.argv[1]).open('a', buffering=1); "
+        "\nwhile True:\n"
+        " child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(300)']); "
+        "output.write(str(child.pid)+'\\n'); time.sleep(0.01)"
+    )
+    process = subprocess.Popen([sys.executable, "-c", script, str(pid_file)], start_new_session=True)
+    try:
+        deadline = time.monotonic() + 10
+        while (not pid_file.exists() or len(pid_file.read_text().split()) < 2):
+            assert time.monotonic() < deadline, "process group did not start"
+            time.sleep(0.01)
+        kill_process_tree(process.pid)
+        process.wait(timeout=5)
+        for pid in map(int, pid_file.read_text().split()):
+            try:
+                child = psutil.Process(pid)
+                assert not child.is_running() or child.status() == psutil.STATUS_ZOMBIE
+            except psutil.NoSuchProcess:
+                pass
+    finally:
+        if process.poll() is None:
+            kill_process_tree(process.pid)
+            process.wait(timeout=5)

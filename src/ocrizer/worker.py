@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import signal
+import sys
 import tempfile
 import threading
 import time
@@ -77,6 +78,8 @@ def _watch_parent(parent_pid: int) -> None:
 
 def run_job_process(conn: Connection, request: JobRequest) -> None:
     """``multiprocessing.Process`` target. Imports are deferred to keep spawn start-up cheap."""
+    if sys.platform != "win32":
+        os.setsid()  # cancellation targets only this document and its descendants
     signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ctrl+C is handled by the runner
     _watch_parent(request.parent_pid)
     tempfile.tempdir = str(request.scratch_dir)  # OCRmyPDF's work files live in our scratch dir
