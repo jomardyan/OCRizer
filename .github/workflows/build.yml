@@ -74,7 +74,7 @@ jobs:
           cache: pip
       - run: |
           sudo apt-get update
-          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-pol tesseract-ocr-osd fonts-dejavu-core libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0 desktop-file-utils
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-pol tesseract-ocr-osd fonts-dejavu-core libegl1 libopengl0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-keysyms1 libxcb-icccm4 libxcb-shape0 desktop-file-utils
       - run: python -m pip install -e '.[gui,build]'
       - run: desktop-file-validate packaging/linux/ocrizer.desktop
       - name: Build AppImage with Tesseract, and smoke-test actual launcher

@@ -17,6 +17,31 @@ _SYSTEM_LIBRARIES = re.compile(
 )
 
 
+def find_tessdata(binary: str) -> Path:
+    """Locate installed models on both Tesseract 4 and 5 without guessing a version path."""
+    listing = subprocess.run([binary, "--list-langs"], check=True, capture_output=True, text=True)
+    candidates = []
+    match = re.search(r'"([^"\n]+)"', listing.stdout + listing.stderr)
+    if match:
+        candidates.append(Path(match[1]))
+    if os.environ.get("TESSDATA_PREFIX"):
+        prefix = Path(os.environ["TESSDATA_PREFIX"])
+        candidates.extend((prefix, prefix / "tessdata"))
+    # Ubuntu 22.04's Tesseract 4 lists language names without the model path.
+    # Ask the package database for the actual installed model, preserving distro layouts.
+    inventory = subprocess.run(
+        ["dpkg-query", "-L", "tesseract-ocr-eng"], capture_output=True, text=True, check=False
+    )
+    if inventory.returncode == 0:
+        candidates.extend(
+            Path(line).parent for line in inventory.stdout.splitlines() if line.endswith("/eng.traineddata")
+        )
+    for candidate in candidates:
+        if all((candidate / f"{language}.traineddata").is_file() for language in ("eng", "pol", "osd")):
+            return candidate
+    raise SystemExit("Cannot locate complete Tesseract models; install tesseract-ocr-eng, -pol and -osd.")
+
+
 def main() -> None:
     if sys.platform != "linux":
         raise SystemExit("AppDirs must be assembled on Linux.")
@@ -40,11 +65,7 @@ def main() -> None:
     bin_dir.mkdir(parents=True)
     tesseract = bin_dir / "tesseract"
     shutil.copy2(binary, tesseract)
-    listing = subprocess.run([binary, "--list-langs"], check=True, capture_output=True, text=True)
-    match = re.search(r'"([^"\n]+)"', listing.stdout + listing.stderr)
-    if not match:
-        raise SystemExit("Cannot locate Tesseract's tessdata directory from --list-langs.")
-    tessdata = Path(match[1])
+    tessdata = find_tessdata(binary)
     models = destination / "usr" / "share" / "tessdata"
     # Tesseract also needs configs/{hocr,pdf,tsv,txt}, tessconfigs and pdf.ttf.
     # Copy support files while limiting the much larger model files to supported languages.
