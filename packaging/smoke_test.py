@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 import subprocess
 import tempfile
 from contextlib import closing
@@ -11,6 +12,27 @@ from pathlib import Path
 
 import pypdfium2 as pdfium
 from PIL import Image, ImageDraw, ImageFont
+
+
+def stop_gui(process: subprocess.Popen[bytes]) -> None:
+    """Stop the AppImage wrapper and its GUI child, then drain inherited pipes."""
+    def signal_owned_tree(force: bool = False) -> None:
+        try:
+            if os.name == "posix":
+                os.killpg(process.pid, signal.SIGKILL if force else signal.SIGTERM)
+            elif force:
+                process.kill()
+            else:
+                process.terminate()
+        except ProcessLookupError:
+            pass
+
+    signal_owned_tree()
+    try:
+        process.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        signal_owned_tree(force=True)
+        process.communicate(timeout=5)
 
 
 def _scan(path: Path) -> None:
@@ -80,12 +102,14 @@ def main() -> None:
                 with closing(document[0]) as page, closing(page.get_textpage()) as text_page:
                     assert "searchable" in text_page.get_text_range().lower(), result
             assert "searchable" in result.with_suffix(".txt").read_text(encoding="utf-8").lower()
-        process = subprocess.Popen(gui, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(
+            gui, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            start_new_session=os.name == "posix",
+        )
         try:
             stdout, stderr = process.communicate(timeout=5)
         except subprocess.TimeoutExpired:
-            process.terminate()
-            process.communicate(timeout=15)
+            stop_gui(process)
         else:
             raise RuntimeError(
                 f"GUI exited before its event loop was verified ({process.returncode}):\n"
