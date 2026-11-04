@@ -158,7 +158,7 @@ def prepare_environment(configured: str | None = None) -> Path | None:
 
 def _run(cmd: list[str], timeout: float = 30.0) -> str:
     kwargs: dict[str, Any] = {}
-    if os.name == "nt":
+    if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
     proc = subprocess.run(  # noqa: S603 - fixed argument list, no shell
         cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",

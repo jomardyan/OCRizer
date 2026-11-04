@@ -34,9 +34,9 @@ from __future__ import annotations
 
 import io
 import math
-import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from functools import cache
@@ -238,7 +238,7 @@ def tesseract_probe(image: Image.Image, language: str = PROBE_LANGUAGE) -> Probe
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     kwargs: dict[str, Any] = {}
-    if os.name == "nt":
+    if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
     proc = subprocess.run(  # noqa: S603
         [exe, "stdin", "stdout", "-l", language, "--psm", "3", "tsv"],

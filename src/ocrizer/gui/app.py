@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import multiprocessing
-import os
 import sys
 from collections.abc import Sequence
 
@@ -12,7 +11,7 @@ def _hide_console_windows() -> None:
     """Windows GUI builds have no console, so every Tesseract/Ghostscript child process that
     OCRmyPDF starts would flash its own console window. Giving the process one hidden console,
     which the children inherit, avoids that."""
-    if os.name != "nt":
+    if sys.platform != "win32":
         return
     import ctypes
     from ctypes import wintypes
