@@ -21,9 +21,12 @@ jobs:
         with:
           python-version: '3.13'
           cache: pip
+      - name: Verify GNU Make command discovery and recipe graph
+        run: |
+          make help
+          make -n build package clean
       - run: python -m pip install -e '.[dev]'
-      - run: ruff check src tests packaging
-      - run: mypy src
+      - run: make lint PYTHON=python
 
   tests:
     strategy:
